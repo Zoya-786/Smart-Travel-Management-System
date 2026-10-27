@@ -1,61 +1,10 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Smart Travel Management System</title>
-<style>
-body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f4f6f9;color:#222}
-header{background:#1d4ed8;color:#fff;padding:12px 20px;display:flex;gap:10px;align-items:center}
-header h1{font-size:18px;margin:0 auto 0 0}header button{background:#ffffff33;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer}
-main{max-width:1050px;margin:20px auto;padding:0 12px}.card{background:#fff;border-radius:8px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px #0002}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
-label{display:block;margin:8px 0;font-size:13px}input,select,textarea{display:block;width:100%;padding:6px;box-sizing:border-box;margin-top:3px}
-button{cursor:pointer;padding:5px 10px;border:1px solid #cbd5e1;border-radius:5px;background:#fff}form button:first-of-type{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
-.err{color:#b91c1c;white-space:pre-line;margin:6px 0;font-size:13px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.kpi{background:#eff6ff;border-radius:8px;padding:10px}.kpi b{font-size:18px;display:block}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
-</style></head><body>
-<header><h1>Smart Travel Management System</h1><button onclick="go({n:'trips'})">Trips &amp; Itinerary</button><button onclick="go({n:'bookings'})">Bookings</button></header>
-<main id="app"></main>
-<script>
-const $=s=>document.querySelector(s);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=n=>"₹"+Number(n).toFixed(2);
-async function api(m,u,b){const r=await fetch(u,{method:m,headers:{"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});let d={};try{d=await r.json()}catch{}return{ok:r.ok,d}}
-const errTxt=d=>d.errors?Object.values(d.errors).join("\n"):(d.error||"Something went wrong.");
-let view={n:"trips"},trips=[],flt={trip_id:"",category:"",status:""};
-function go(v){if(v)view=v;render()}
-function render(){const m=$("#app");return view.n=="trips"?tripsView(m):view.n=="trip"?tripView(m,view.id):bookingsView(m)}
-function formHtml(fields,v={}){return"<form novalidate>"+fields.map(([n,l,t,o])=>`<label>${l}`+(t=="select"?`<select name="${n}">${o.map(x=>`<option value="${esc(x[0])}"${String(v[n]??"")==x[0]?" selected":""}>${esc(x[1])}</option>`).join("")}</select>`:t=="textarea"?`<textarea name="${n}">${esc(v[n])}</textarea>`:`<input name="${n}" type="${t}"${t=="number"?' step="any"':""} value="${esc(v[n])}">`)+"</label>").join("")+`<div class="err"></div><button>Save</button> <button type="button" onclick="go()">Cancel</button></form>`}
-function mount(id,fields,v,send){$("#"+id).innerHTML=formHtml(fields,v);const f=$("#"+id+" form");f.onsubmit=async e=>{e.preventDefault();const r=await send(Object.fromEntries(new FormData(f)));r.ok?go():f.querySelector(".err").textContent=errTxt(r.d)}}
-// ---- Trips ----
-async function tripsView(m){const{d}=await api("GET","/api/trips");trips=d;
-m.innerHTML=`<div class=card><h2>Trips</h2><button onclick="tripForm()">+ New trip</button><div id=f></div><br><table><tr><th>Title<th>Destination<th>Dates<th>Travelers<th>Estimated cost<th></tr>`+
-d.map(t=>`<tr><td>${esc(t.title)}<td>${esc(t.destination)}<td>${t.start_date} → ${t.end_date}<td>${t.travelers}<td>${money(t.est_cost)}<td><button onclick="go({n:'trip',id:${t.id}})">View</button> <button onclick="tripForm(${t.id})">Edit</button> <button onclick="delTrip(${t.id})">Delete</button>`).join("")+`</table>${d.length?"":"<p>No trips yet.</p>"}</div>`}
-function tripForm(id){const v=id?trips.find(t=>t.id==id):{travelers:1};
-mount("f",[["title","Trip title","text"],["destination","Destination","text"],["start_date","Start date","date"],["end_date","End date","date"],["travelers","Number of travelers","number"],["description","Description","textarea"]],v,b=>api(id?"PUT":"POST",id?`/api/trips/${id}`:"/api/trips",b))}
-async function delTrip(id){if(!confirm("Delete this trip and all its activities?"))return;const r=await api("DELETE","/api/trips/"+id);r.ok?go():alert(errTxt(r.d))}
-// ---- Trip detail + activities ----
-let acts=[],cur=null;
-async function tripView(m,id){cur=(await api("GET","/api/trips/"+id)).d;acts=(await api("GET",`/api/trips/${id}/activities`)).d;
-m.innerHTML=`<div class=card><button onclick="go({n:'trips'})">← Back</button><h2>${esc(cur.title)} — ${esc(cur.destination)}</h2><p>${cur.start_date} → ${cur.end_date} · ${cur.travelers} traveler(s)</p><p>${esc(cur.description)}</p>
-<div class=kpi style="max-width:260px">Estimated itinerary expense<b>${money(cur.est_cost)}</b></div></div>
-<div class=card><h3>Daily itinerary</h3><button onclick="actForm()">+ Add activity</button><div id=f></div><br><table><tr><th>Date<th>Time<th>Activity<th>Location<th>Description<th>Est. cost<th></tr>`+
-acts.map(a=>`<tr><td>${a.date}<td>${a.time}<td>${esc(a.name)}<td>${esc(a.location)}<td>${esc(a.description)}<td>${money(a.cost)}<td><button onclick="actForm(${a.id})">Edit</button> <button onclick="delAct(${a.id})">Delete</button>`).join("")+`</table>${acts.length?"":"<p>No activities yet.</p>"}</div>`}
-function actForm(id){const v=id?acts.find(a=>a.id==id):{};
-mount("f",[["name","Activity name","text"],["date","Date","date"],["time","Time","time"],["location","Location","text"],["description","Description","textarea"],["cost","Estimated cost","number"]],v,b=>api(id?"PUT":"POST",id?`/api/activities/${id}`:`/api/trips/${cur.id}/activities`,b))}
-async function delAct(id){if(confirm("Delete this activity?")){await api("DELETE","/api/activities/"+id);go()}}
-// ---- Bookings ----
-let bks=[];
-async function bookingsView(m){trips=(await api("GET","/api/trips")).d;const q=new URLSearchParams(Object.entries(flt).filter(x=>x[1])).toString();
-bks=(await api("GET","/api/bookings?"+q)).d;const s=(await api("GET","/api/bookings/summary?"+q)).d;
-const opt=(a,sel)=>a.map(x=>`<option value="${esc(x[0])}"${sel==x[0]?" selected":""}>${esc(x[1])}</option>`).join("");
-const C=["Flight","Train","Hotel","Cab"].map(x=>[x,x]),S=["Pending","Confirmed","Cancelled"].map(x=>[x,x]);
-m.innerHTML=`<div class=card><h2>Bookings</h2><div class=row>
-<label>Trip<select onchange="flt.trip_id=this.value;go()">${opt([["","All"],...trips.map(t=>[t.id,t.title])],flt.trip_id)}</select></label>
-<label>Category<select onchange="flt.category=this.value;go()">${opt([["","All"],...C],flt.category)}</select></label>
-<label>Status<select onchange="flt.status=this.value;go()">${opt([["","All"],...S],flt.status)}</select></label></div>
-<div class=grid><div class=kpi>Total value (all records)<b>${money(s.total_value)}</b></div><div class=kpi>Confirmed expenses<b>${money(s.confirmed_total)}</b></div><div class=kpi>Pending<b>${money(s.pending_total)}</b></div><div class=kpi>Cancelled<b>${money(s.cancelled_total)}</b></div></div><br>
-<button onclick="bkForm()">+ New booking</button><div id=f></div><br><table><tr><th>Trip<th>Category<th>Provider<th>Reference<th>Booked<th>Travel<th>Price<th>Status<th>Notes<th></tr>`+
-bks.map(b=>`<tr><td>${esc(b.trip_title)}<td>${b.category}<td>${esc(b.provider)}<td>${esc(b.reference)}<td>${b.booking_date}<td>${b.travel_date}<td>${money(b.price)}<td>${b.status}<td>${esc(b.notes)}<td><button onclick="bkForm(${b.id})">Edit</button> ${b.status=="Cancelled"?"":`<button onclick="cancelBk(${b.id})">Cancel</button>`}`).join("")+`</table>${bks.length?"":"<p>No bookings match.</p>"}</div>`}
-function bkForm(id){const v=id?bks.find(b=>b.id==id):{category:"Flight",status:"Pending"};
-mount("f",[["trip_id","Trip","select",[["","-- select trip --"],...trips.map(t=>[t.id,t.title])]],["category","Category","select",["Flight","Train","Hotel","Cab"].map(x=>[x,x])],["provider","Provider name","text"],["reference","Booking reference","text"],["booking_date","Booking date","date"],["travel_date","Travel date","date"],["price","Price","number"],["status","Status","select",["Pending","Confirmed","Cancelled"].map(x=>[x,x])],["notes","Notes","textarea"]],v,b=>api(id?"PUT":"POST",id?`/api/bookings/${id}`:"/api/bookings",b))}
-async function cancelBk(id){if(confirm("Cancel this booking? The record will be kept.")){await api("POST",`/api/bookings/${id}/cancel`);go()}}
-render();
-</script></body></html>
+<title>Smart Travel Management System</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<aside id="side"><div class="brand">🧭 Smart Travel<small>Management System</small></div>
+<nav id="nav">
+<a href="#dashboard" data-r="dashboard">📊 Dashboard</a><a href="#trips" data-r="trips">🧳 My Trips</a><a href="#explore" data-r="explore">🗺️ Explore Itineraries</a>
+<a href="#planner" data-r="planner">📅 Daily Planner</a><a href="#bookings" data-r="bookings">🎫 Travel Bookings</a><a href="#budget" data-r="budget">💰 Budget &amp; Expenses</a>
+<a href="#review" data-r="review" class="demo">🏢 Agency Review <em>demo</em></a></nav>
+<p class="side-note">College PBL prototype. Bookings and agency approvals are simulated records only.</p></aside>
+<main id="view"></main><div id="toasts"></div><dialog id="dlg"></dialog>
+<script src="/static/app.js"></script></body></html>
